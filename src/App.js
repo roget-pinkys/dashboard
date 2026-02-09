@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 
 // COMPLETE REAL DATA - Showing 15 of each type  
 const DATA = {
