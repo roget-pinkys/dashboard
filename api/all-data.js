@@ -1,4 +1,4 @@
-// Vercel Serverless Function - Fetch all CRM modules from Zoho directly
+// Vercel Serverless Function - Fast initial load, then progressive loading
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Step 1: Get access token from refresh token
+    // Step 1: Get access token
     const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
       method: 'POST',
       headers: {
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
 
-    // Step 2: Fetch all modules in parallel
+    // Step 2: Fetch ONLY FIRST PAGE (fast - 2-3 seconds)
     const modules = ['Leads', 'Deals', 'Calls', 'Tasks', 'Notes'];
     
     const fieldMappings = {
@@ -52,110 +52,75 @@ export default async function handler(req, res) {
       'Notes': 'Note_Content,Created_Time,Owner,Parent_Id'
     };
 
-    // Fetch module with pagination to get ALL records
-    const fetchModule = async (module) => {
+    const fetchFirstPage = async (module) => {
       const fields = fieldMappings[module];
-      let allData = [];
-      let page = 1;
-      let hasMoreRecords = true;
+      const url = `https://www.zohoapis.com/crm/v2/${module}?fields=${fields}&page=1&per_page=200`;
       
-      while (hasMoreRecords) {
-        const url = `https://www.zohoapis.com/crm/v2/${module}?fields=${fields}&page=${page}&per_page=200`;
-        
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Zoho-oauthtoken ${accessToken}`
-          }
-        });
-        
-        if (!response.ok) {
-          console.error(`Failed to fetch ${module} page ${page}:`, response.status);
-          break;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`
         }
-        
-        const result = await response.json();
-        const pageData = result.data || [];
-        
-        allData = allData.concat(pageData);
-        
-        // Check if there are more records
-        hasMoreRecords = result.info?.more_records === true;
-        page++;
-        
-        console.log(`Fetched ${module} page ${page - 1}: ${pageData.length} records, total: ${allData.length}`);
+      });
+      
+      if (!response.ok) {
+        console.error(`Failed to fetch ${module}:`, response.status);
+        return { module, data: [], info: {} };
       }
       
+      const result = await response.json();
       return { 
         module, 
-        data: allData,
-        totalPages: page - 1,
-        totalRecords: allData.length
+        data: result.data || [],
+        info: result.info || {},
+        hasMore: result.info?.more_records === true
       };
     };
 
-    // Fetch SMS separately with pagination
-    const fetchSMS = async () => {
-      let allData = [];
-      let page = 1;
-      let hasMoreRecords = true;
+    // Fetch SMS first page
+    const fetchSMSFirstPage = async () => {
+      const url = 'https://www.zohoapis.com/crm/v2/SMS?per_page=200&page=1';
       
-      while (hasMoreRecords) {
-        const url = `https://www.zohoapis.com/crm/v2/SMS?per_page=200&page=${page}`;
-        
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Zoho-oauthtoken ${accessToken}`
-          }
-        });
-        
-        if (!response.ok) {
-          console.error(`Failed to fetch SMS page ${page}:`, response.status);
-          break;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`
         }
-        
-        const result = await response.json();
-        const pageData = result.data || [];
-        
-        allData = allData.concat(pageData);
-        
-        hasMoreRecords = result.info?.more_records === true;
-        page++;
-        
-        console.log(`Fetched SMS page ${page - 1}: ${pageData.length} records, total: ${allData.length}`);
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch SMS:', response.status);
+        return { module: 'SMS', data: [], info: {} };
       }
       
+      const result = await response.json();
       return { 
         module: 'SMS', 
-        data: allData,
-        totalPages: page - 1,
-        totalRecords: allData.length
+        data: result.data || [],
+        info: result.info || {},
+        hasMore: result.info?.more_records === true
       };
     };
 
-    // Fetch all modules
+    // Fetch all first pages in parallel
     const results = await Promise.all([
-      ...modules.map(fetchModule),
-      fetchSMS()
+      ...modules.map(fetchFirstPage),
+      fetchSMSFirstPage()
     ]);
     
-    // Format response with pagination info
+    // Format response
     const formattedData = {};
-    const paginationInfo = {};
+    const moreRecordsAvailable = {};
     
-    results.forEach(({ module, data, totalPages, totalRecords }) => {
+    results.forEach(({ module, data, hasMore }) => {
       const moduleKey = module.toLowerCase();
       formattedData[moduleKey] = data;
-      paginationInfo[moduleKey] = {
-        pages: totalPages,
-        records: totalRecords
-      };
+      moreRecordsAvailable[moduleKey] = hasMore;
     });
 
     return res.status(200).json({
       success: true,
       timestamp: new Date().toISOString(),
       data: formattedData,
-      pagination: paginationInfo,
+      moreRecordsAvailable,
       summary: {
         leads: formattedData.leads?.length || 0,
         deals: formattedData.deals?.length || 0,
@@ -163,7 +128,7 @@ export default async function handler(req, res) {
         tasks: formattedData.tasks?.length || 0,
         sms: formattedData.sms?.length || 0,
         notes: formattedData.notes?.length || 0,
-        total: Object.values(formattedData).reduce((sum, arr) => sum + (arr?.length || 0), 0)
+        message: 'Showing first 200 records per module. Use /api/crm-data?module=X&page=2 to fetch more.'
       }
     });
 
