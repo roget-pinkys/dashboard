@@ -1,4 +1,4 @@
-// Vercel Serverless Function - Fetch all CRM modules
+// Vercel Serverless Function - Fetch all CRM modules from Zoho directly
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,53 +9,105 @@ export default async function handler(req, res) {
   }
 
   try {
-    const MCP_SERVER_URL = process.env.MCP_SERVER_URL;
-    const MCP_SERVER_KEY = process.env.MCP_SERVER_KEY;
+    const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
+    const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
+    const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN;
 
-    if (!MCP_SERVER_URL || !MCP_SERVER_KEY) {
+    if (!ZOHO_CLIENT_ID || !ZOHO_CLIENT_SECRET || !ZOHO_REFRESH_TOKEN) {
       return res.status(500).json({ 
-        error: 'MCP server credentials not configured'
+        error: 'Zoho credentials not configured',
+        message: 'Please add ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, and ZOHO_REFRESH_TOKEN to Vercel environment variables'
       });
     }
 
-    // Fetch all modules in parallel
-    const modules = ['Leads', 'Deals', 'Calls', 'Tasks', 'Events', 'SMS', 'Notes'];
+    // Step 1: Get access token from refresh token
+    const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        refresh_token: ZOHO_REFRESH_TOKEN,
+        client_id: ZOHO_CLIENT_ID,
+        client_secret: ZOHO_CLIENT_SECRET,
+        grant_type: 'refresh_token'
+      })
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error(`Token refresh failed: ${tokenResponse.status}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    // Step 2: Fetch all modules in parallel
+    const modules = ['Leads', 'Deals', 'Calls', 'Tasks', 'Events', 'Notes'];
+    
     const fieldMappings = {
-      'Leads': 'id,First_Name,Last_Name,Email,Phone,Company,Lead_Status,Lead_Source,Owner,Created_Time',
-      'Deals': 'id,Deal_Name,Amount,Stage,Closing_Date,Owner,Created_Time,Account_Name',
-      'Calls': 'id,Subject,Call_Type,Call_Duration,Call_Start_Time,Owner,Related_To',
-      'Tasks': 'id,Subject,Status,Priority,Due_Date,Owner,Created_Time',
-      'Events': 'id,Event_Title,Start_DateTime,End_DateTime,Venue,Owner,Participants',
-      'SMS': 'id,Message,Owner',
-      'Notes': 'id,Note_Content,Created_Time,Owner,Parent_Id'
+      'Leads': 'First_Name,Last_Name,Email,Phone,Company,Lead_Status,Lead_Source,Owner,Created_Time',
+      'Deals': 'Deal_Name,Amount,Stage,Closing_Date,Owner,Created_Time,Account_Name',
+      'Calls': 'Subject,Call_Type,Call_Duration,Call_Start_Time,Owner,Related_To',
+      'Tasks': 'Subject,Status,Priority,Due_Date,Owner,Created_Time',
+      'Events': 'Event_Title,Start_DateTime,End_DateTime,Venue,Owner,Participants',
+      'Notes': 'Note_Content,Created_Time,Owner,Parent_Id'
     };
 
     const fetchModule = async (module) => {
-      const response = await fetch(`${MCP_SERVER_URL}?key=${MCP_SERVER_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'ZohoCRM_Get_Records',
-          parameters: {
-            path_variables: { module },
-            query_params: {
-              page: 1,
-              per_page: 200,
-              fields: fieldMappings[module]
-            }
-          }
-        })
+      const fields = fieldMappings[module];
+      const url = `https://www.zohoapis.com/crm/v2/${module}?fields=${fields}&per_page=200`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`
+        }
       });
       
-      const data = await response.json();
-      return { module, data: data.data || [], info: data.info || {} };
+      if (!response.ok) {
+        console.error(`Failed to fetch ${module}:`, response.status);
+        return { module, data: [], error: response.status };
+      }
+      
+      const result = await response.json();
+      return { 
+        module, 
+        data: result.data || [], 
+        info: result.info || {} 
+      };
     };
 
-    const results = await Promise.all(modules.map(fetchModule));
+    // Fetch SMS separately (different endpoint)
+    const fetchSMS = async () => {
+      const url = 'https://www.zohoapis.com/crm/v2/SMS?per_page=200';
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch SMS:', response.status);
+        return { module: 'SMS', data: [], error: response.status };
+      }
+      
+      const result = await response.json();
+      return { 
+        module: 'SMS', 
+        data: result.data || [], 
+        info: result.info || {} 
+      };
+    };
+
+    // Fetch all modules
+    const results = await Promise.all([
+      ...modules.map(fetchModule),
+      fetchSMS()
+    ]);
     
     // Format response
     const formattedData = {};
-    results.forEach(({ module, data, info }) => {
+    results.forEach(({ module, data }) => {
       formattedData[module.toLowerCase()] = data;
     });
 
@@ -78,7 +130,8 @@ export default async function handler(req, res) {
     console.error('API Error:', error);
     return res.status(500).json({ 
       error: 'Failed to fetch CRM data',
-      message: error.message 
+      message: error.message,
+      details: error.toString()
     });
   }
 }

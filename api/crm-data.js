@@ -1,4 +1,4 @@
-// Vercel Serverless Function - Fetch data from Zoho CRM via MCP
+// Vercel Serverless Function - Fetch single module from Zoho CRM
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,54 +16,62 @@ export default async function handler(req, res) {
   }
 
   try {
-    // MCP Server configuration from environment variables
-    const MCP_SERVER_URL = process.env.MCP_SERVER_URL;
-    const MCP_SERVER_KEY = process.env.MCP_SERVER_KEY;
+    const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
+    const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
+    const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN;
 
-    if (!MCP_SERVER_URL || !MCP_SERVER_KEY) {
+    if (!ZOHO_CLIENT_ID || !ZOHO_CLIENT_SECRET || !ZOHO_REFRESH_TOKEN) {
       return res.status(500).json({ 
-        error: 'MCP server credentials not configured',
-        message: 'Please add MCP_SERVER_URL and MCP_SERVER_KEY to Vercel environment variables'
+        error: 'Zoho credentials not configured'
       });
     }
 
-    // Field mappings for each module
-    const fieldMappings = {
-      'Leads': 'id,First_Name,Last_Name,Email,Phone,Company,Lead_Status,Lead_Source,Owner,Created_Time',
-      'Deals': 'id,Deal_Name,Amount,Stage,Closing_Date,Owner,Created_Time,Account_Name',
-      'Calls': 'id,Subject,Call_Type,Call_Duration,Call_Start_Time,Owner,Related_To',
-      'Tasks': 'id,Subject,Status,Priority,Due_Date,Owner,Created_Time',
-      'Events': 'id,Event_Title,Start_DateTime,End_DateTime,Venue,Owner,Participants',
-      'SMS': 'id,Message,Owner',
-      'Notes': 'id,Note_Content,Created_Time,Owner,Parent_Id'
-    };
-
-    const fields = fieldMappings[module] || 'id';
-
-    // Call MCP server
-    const mcpResponse = await fetch(`${MCP_SERVER_URL}?key=${MCP_SERVER_KEY}`, {
+    // Get access token
+    const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
-        tool: 'ZohoCRM_Get_Records',
-        parameters: {
-          path_variables: { module },
-          query_params: {
-            page: parseInt(page),
-            per_page: parseInt(perPage),
-            fields
-          }
-        }
+      body: new URLSearchParams({
+        refresh_token: ZOHO_REFRESH_TOKEN,
+        client_id: ZOHO_CLIENT_ID,
+        client_secret: ZOHO_CLIENT_SECRET,
+        grant_type: 'refresh_token'
       })
     });
 
-    if (!mcpResponse.ok) {
-      throw new Error(`MCP server error: ${mcpResponse.status}`);
+    if (!tokenResponse.ok) {
+      throw new Error(`Token refresh failed: ${tokenResponse.status}`);
     }
 
-    const data = await mcpResponse.json();
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+
+    // Field mappings
+    const fieldMappings = {
+      'Leads': 'First_Name,Last_Name,Email,Phone,Company,Lead_Status,Lead_Source,Owner,Created_Time',
+      'Deals': 'Deal_Name,Amount,Stage,Closing_Date,Owner,Created_Time,Account_Name',
+      'Calls': 'Subject,Call_Type,Call_Duration,Call_Start_Time,Owner,Related_To',
+      'Tasks': 'Subject,Status,Priority,Due_Date,Owner,Created_Time',
+      'Events': 'Event_Title,Start_DateTime,End_DateTime,Venue,Owner,Participants',
+      'SMS': 'Message,Owner',
+      'Notes': 'Note_Content,Created_Time,Owner,Parent_Id'
+    };
+
+    const fields = fieldMappings[module] || '';
+    const url = `https://www.zohoapis.com/crm/v2/${module}?fields=${fields}&page=${page}&per_page=${perPage}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${accessToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Zoho API error: ${response.status}`);
+    }
+
+    const data = await response.json();
     
     return res.status(200).json({
       success: true,
