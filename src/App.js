@@ -240,8 +240,9 @@ export default function LiveCRMDashboard() {
       <div className="max-w-7xl mx-auto p-6 bg-white min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading CRM Data...</h2>
-          <p className="text-gray-600">Fetching live data from Zoho CRM</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading ALL CRM Data...</h2>
+          <p className="text-gray-600">Fetching all records from Zoho CRM</p>
+          <p className="text-sm text-gray-500 mt-2">This may take 10-30 seconds for large datasets</p>
         </div>
       </div>
     );
@@ -272,12 +273,12 @@ export default function LiveCRMDashboard() {
         <h1 className="text-3xl font-bold mb-2">Live CRM Dashboard</h1>
         <p className="text-gray-600">Pinky's Iron Doors - Real-time Zoho Data 🔄</p>
         <div className="mt-3 p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
-          <p className="text-sm font-semibold text-gray-900">✅ LIVE DATA CONNECTION!</p>
+          <p className="text-sm font-semibold text-gray-900">✅ ALL DATA LOADED!</p>
           <p className="text-xs text-gray-700 mt-1">
             {data.leads.length} Leads • {data.deals.length} Deals (${(totalValue/1000).toFixed(0)}K total) • {data.calls.length} Calls • {data.tasks.length} Tasks • {data.sms.length} SMS • {data.notes.length} Notes
           </p>
           <p className="text-xs text-blue-600 mt-1">
-            🔄 Data updates in real-time from Zoho CRM
+            🔄 Complete dataset from Zoho CRM • Total: {data.leads.length + data.deals.length + data.calls.length + data.tasks.length + data.sms.length + data.notes.length} records
           </p>
           {dateFilter !== 'all' && (
             <p className="text-xs text-green-700 mt-1 font-medium">
