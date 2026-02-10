@@ -42,14 +42,13 @@ export default async function handler(req, res) {
     const accessToken = tokenData.access_token;
 
     // Step 2: Fetch all modules in parallel
-    const modules = ['Leads', 'Deals', 'Calls', 'Tasks', 'Events', 'Notes'];
+    const modules = ['Leads', 'Deals', 'Calls', 'Tasks', 'Notes'];
     
     const fieldMappings = {
       'Leads': 'First_Name,Last_Name,Email,Phone,Company,Lead_Status,Lead_Source,Owner,Created_Time',
       'Deals': 'Deal_Name,Amount,Stage,Closing_Date,Owner,Created_Time,Account_Name',
       'Calls': 'Subject,Call_Type,Call_Duration,Call_Start_Time,Owner,Related_To',
       'Tasks': 'Subject,Status,Priority,Due_Date,Owner,Created_Time',
-      'Events': 'Event_Title,Start_DateTime,End_DateTime,Venue,Owner,Participants',
       'Notes': 'Note_Content,Created_Time,Owner,Parent_Id'
     };
 
@@ -120,7 +119,6 @@ export default async function handler(req, res) {
         deals: formattedData.deals?.length || 0,
         calls: formattedData.calls?.length || 0,
         tasks: formattedData.tasks?.length || 0,
-        events: formattedData.events?.length || 0,
         sms: formattedData.sms?.length || 0,
         notes: formattedData.notes?.length || 0
       }

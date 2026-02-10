@@ -10,7 +10,6 @@ export default function LiveCRMDashboard() {
     deals: [],
     calls: [],
     tasks: [],
-    events: [],
     sms: [],
     notes: []
   });
@@ -116,7 +115,6 @@ export default function LiveCRMDashboard() {
     { key: 'deals', label: 'Deals', icon: '💰', count: data.deals.length, color: 'green' },
     { key: 'calls', label: 'Calls', icon: '📞', count: data.calls.length, color: 'blue' },
     { key: 'tasks', label: 'Tasks', icon: '✓', count: data.tasks.length, color: 'orange' },
-    { key: 'events', label: 'Events', icon: '📅', count: data.events.length, color: 'red' },
     { key: 'sms', label: 'SMS', icon: '💬', count: data.sms.length, color: 'teal' },
     { key: 'notes', label: 'Notes', icon: '📝', count: data.notes.length, color: 'gray' }
   ];
@@ -128,7 +126,6 @@ export default function LiveCRMDashboard() {
       case 'deals': moduleData = data.deals; break;
       case 'calls': moduleData = data.calls; break;
       case 'tasks': moduleData = data.tasks; break;
-      case 'events': moduleData = data.events; break;
       case 'sms': moduleData = data.sms; break;
       case 'notes': moduleData = data.notes; break;
       default: moduleData = [];
@@ -194,20 +191,6 @@ export default function LiveCRMDashboard() {
     </div>
   );
 
-  const renderEvent = (event) => (
-    <div key={event.id} className="border-b border-gray-200 py-3 px-4 hover:bg-red-50">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl">📅</span>
-        <span className="font-semibold text-gray-900">{event.Event_Title}</span>
-      </div>
-      <div className="ml-7 text-sm text-gray-600">
-        <p>🕐 {formatDate(event.Start_DateTime)}</p>
-        {event.Venue && <p>📍 {event.Venue}</p>}
-        <p className="text-xs text-gray-500">Owner: {event.Owner?.name}</p>
-      </div>
-    </div>
-  );
-
   const renderSms = (sms) => (
     <div key={sms.id} className="border-b border-gray-200 py-3 px-4 hover:bg-teal-50">
       <div className="flex items-center gap-2 mb-1">
@@ -245,7 +228,6 @@ export default function LiveCRMDashboard() {
       case 'deals': return renderDeal(item);
       case 'calls': return renderCall(item);
       case 'tasks': return renderTask(item);
-      case 'events': return renderEvent(item);
       case 'sms': return renderSms(item);
       case 'notes': return renderNote(item);
       default: return null;
@@ -292,7 +274,7 @@ export default function LiveCRMDashboard() {
         <div className="mt-3 p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
           <p className="text-sm font-semibold text-gray-900">✅ LIVE DATA CONNECTION!</p>
           <p className="text-xs text-gray-700 mt-1">
-            {data.leads.length} Leads • {data.deals.length} Deals (${(totalValue/1000).toFixed(0)}K total) • {data.calls.length} Calls • {data.tasks.length} Tasks • {data.events.length} Events • {data.sms.length} SMS • {data.notes.length} Notes
+            {data.leads.length} Leads • {data.deals.length} Deals (${(totalValue/1000).toFixed(0)}K total) • {data.calls.length} Calls • {data.tasks.length} Tasks • {data.sms.length} SMS • {data.notes.length} Notes
           </p>
           <p className="text-xs text-blue-600 mt-1">
             🔄 Data updates in real-time from Zoho CRM
@@ -333,7 +315,6 @@ export default function LiveCRMDashboard() {
             activeTab === 'deals' ? data.deals.length :
             activeTab === 'calls' ? data.calls.length :
             activeTab === 'tasks' ? data.tasks.length :
-            activeTab === 'events' ? data.events.length :
             activeTab === 'sms' ? data.sms.length :
             data.notes.length
           } records
